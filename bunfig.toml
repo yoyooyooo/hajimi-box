@@ -1,0 +1,18 @@
+[install]
+# 使用更快的安装策略
+cache = true
+frozen = false
+
+[install.scopes]
+# 工作区配置
+"@hajimi-box" = { registry = "https://registry.npmjs.org/" }
+
+[build]
+# 构建优化
+minify = true
+target = "esnext"
+
+[test]
+# 测试配置
+preload = []
+timeout = 30000
