@@ -1,17 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   User,
   CreateUserRequest,
   UpdateUserRequest,
   useCreateUser,
-  useGetAllUsers,
+  useUsersQuery,
   useUpdateUser,
   useDeleteUser,
-  useInitDb,
 } from "./hooks";
 
 const UserManager: React.FC = () => {
-  const [users, setUsers] = useState<User[]>([]);
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState<CreateUserRequest>({
@@ -19,63 +17,19 @@ const UserManager: React.FC = () => {
     email: "",
     age: undefined,
   });
-  const [isLoading, setIsLoading] = useState(true);
+  const usersQuery = useUsersQuery();
+  const createUser = useCreateUser();
+  const updateUser = useUpdateUser();
+  const deleteUser = useDeleteUser();
 
-  const { execute: createUser, loading: creating } = useCreateUser();
-  const { execute: getAllUsers, loading: loading } = useGetAllUsers();
-  const { execute: updateUser, loading: updating } = useUpdateUser();
-  const { execute: deleteUser, loading: deleting } = useDeleteUser();
-  const { execute: initDb } = useInitDb();
+  const users = usersQuery.data ?? [];
+  const isLoading = usersQuery.isLoading || usersQuery.isFetching;
+  const deleting = deleteUser.isPending;
+  const updating = updateUser.isPending;
+  const creating = createUser.isPending;
 
-  console.log("Deleting state:", deleting);
-  console.log("Loading state:", loading);
-  console.log("IsLoading state:", isLoading);
-  console.log("Users length:", users.length);
-
-  const loadUsers = async () => {
-    try {
-      setIsLoading(true);
-      const userList = await getAllUsers();
-      setUsers(userList);
-    } catch (error) {
-      console.error("Failed to load users:", error);
-      // 如果获取失败，可能是数据库还没初始化
-      try {
-        await initDb();
-        const userList = await getAllUsers();
-        setUsers(userList);
-      } catch (retryError) {
-        console.error("Failed to load users after init:", retryError);
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (users.length === 0) {
-      loadUsers();
-    }
-  }, [users.length]);
-
-  useEffect(() => {
-    const initialize = async () => {
-      try {
-        setIsLoading(true);
-        await initDb();
-        await loadUsers();
-      } catch (error) {
-        console.error("Failed to initialize:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    initialize();
-  }, []);
-
-  // 添加一个刷新按钮的处理函数
   const handleRefresh = () => {
-    loadUsers();
+    usersQuery.refetch();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,12 +42,10 @@ const UserManager: React.FC = () => {
           updateData.email = formData.email;
         if (formData.age !== editingUser.age) updateData.age = formData.age;
 
-        await updateUser({ id: editingUser.id, request: updateData });
+        await updateUser.mutateAsync({ id: editingUser.id, request: updateData });
       } else {
-        await createUser({ request: formData });
+        await createUser.mutateAsync({ request: formData });
       }
-
-      await loadUsers();
       resetForm();
     } catch (error) {
       console.error("Failed to save user:", error);
@@ -115,9 +67,8 @@ const UserManager: React.FC = () => {
 
     try {
       console.log("Attempting to delete user with id:", id);
-      await deleteUser({ id: id });
-      console.log("Delete successful, reloading users");
-      await loadUsers();
+      await deleteUser.mutateAsync({ id });
+      console.log("Delete successful");
     } catch (error) {
       console.error("Failed to delete user:", error);
       alert("删除失败: " + error);

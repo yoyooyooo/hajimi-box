@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export const useWindowSize = () => {
   const [windowSize, setWindowSize] = useState({ width: 0, height: 0 });
@@ -71,27 +72,60 @@ export interface UpdateUserRequest {
   age?: number | undefined;
 }
 
-// CRUD hooks
+// TanStack Query keys
+const usersQueryKey = ["users"] as const;
+
+// Users query with auto-init fallback
+export const useUsersQuery = () => {
+  return useQuery<User[]>({
+    queryKey: usersQueryKey,
+    queryFn: async () => {
+      try {
+        return await invoke<User[]>("get_all_users");
+      } catch (err) {
+        // 若表未初始化，则尝试初始化后再读取
+        try {
+          await invoke<string>("init_db");
+          return await invoke<User[]>("get_all_users");
+        } catch (e) {
+          throw err || e;
+        }
+      }
+    },
+    staleTime: 5_000,
+  });
+};
+
+// CRUD mutations with invalidation
 export const useCreateUser = () => {
-  return useTauriCommand<User>('create_user');
-};
-
-export const useGetUser = () => {
-  return useTauriCommand<User>('get_user');
-};
-
-export const useGetAllUsers = () => {
-  return useTauriCommand<User[]>('get_all_users');
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ request }: { request: CreateUserRequest }) =>
+      invoke<User>("create_user", { request }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: usersQueryKey }),
+  });
 };
 
 export const useUpdateUser = () => {
-  return useTauriCommand<User>('update_user');
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, request }: { id: number; request: UpdateUserRequest }) =>
+      invoke<User>("update_user", { id, request }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: usersQueryKey }),
+  });
 };
 
 export const useDeleteUser = () => {
-  return useTauriCommand<void>('delete_user');
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: number }) =>
+      invoke<void>("delete_user", { id }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: usersQueryKey }),
+  });
 };
 
 export const useInitDb = () => {
-  return useTauriCommand<string>('init_db');
+  return useMutation({
+    mutationFn: async () => invoke<string>("init_db"),
+  });
 };

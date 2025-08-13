@@ -6,6 +6,7 @@ use database::init_database;
 use models::{CreateUserRequest, UpdateUserRequest, UserResponse};
 use services::UserService;
 use tauri::AppHandle;
+use sqlx::Row; // for row.get
 
 #[tauri::command]
 fn greet(name: &str) -> String {
